@@ -5,14 +5,19 @@ ENV PIP_NO_CACHE_DIR=1 \
 
 WORKDIR /processor
 
+# PyTorch build: cpu or cuda. app.yml's variants set it (cpu variant: CPU-only torch from the PyTorch CPU
+# index, no NVIDIA libraries; gpu variant: the CUDA 13.2 build, which also runs on CPU with USE_GPU=auto).
+# The default is cpu for a builder that passes no build arguments.
+ARG TORCH_FLAVOUR=cpu
+
 # The complete pinned dependency set (no resolver: see requirements.txt; wheels, and the pure-Python
-# sdists of cell2location and a few small packages). torch is the
-# CUDA 13.2 build from PyPI, like processor-lst-ai: the same image runs on the standard (cpu) runtime
-# and uses the GPU on the gpu runtime. It makes the image large (about 7 GB).
-COPY requirements.txt /processor/requirements.txt
-RUN pip install --no-deps --prefer-binary -r /processor/requirements.txt \
+# sdists of cell2location and docrep).
+COPY requirements.txt requirements-${TORCH_FLAVOUR}.txt /processor/
+RUN pip install --no-deps --prefer-binary \
+        -r /processor/requirements.txt -r /processor/requirements-${TORCH_FLAVOUR}.txt \
     && find /usr/local/lib/python3.12/site-packages -name '*.pyc' -delete \
-    && find /usr/local/lib/python3.12/site-packages -path '*/torch/*' -prune -o -type d -name tests -prune -exec rm -rf {} +
+    && find /usr/local/lib/python3.12/site-packages -path '*/torch/*' -prune -o -type d -name tests -prune -exec rm -rf {} + \
+    && rm -rf /usr/local/lib/python3.12/site-packages/torch/include
 
 COPY processor/ /processor/processor/
 COPY VERSION /processor/VERSION
@@ -23,14 +28,17 @@ ENV PYTHONPATH="/processor" \
     MPLBACKEND=Agg \
     MPLCONFIGDIR=/tmp/matplotlib \
     NUMBA_CACHE_DIR=/tmp/numba \
-    XDG_CACHE_HOME=/tmp/cache
+    XDG_CACHE_HOME=/tmp/cache \
+    TORCH_FLAVOUR=${TORCH_FLAVOUR}
 
 # Build matplotlib's font cache and import the stack once as the run-time user would, so a run needs no
 # writes outside /tmp and no network.
 RUN python -c "import matplotlib.pyplot, scanpy, cell2location, cell2location.models.downstream" \
     && mkdir -p /tmp/matplotlib /tmp/numba /tmp/cache && chmod -R a+rwX /tmp/matplotlib /tmp/numba /tmp/cache
 
-# Runs as uid 1000 on the platform; nothing here needs root.
+# Runs as uid 1000 on the platform; nothing here needs root. PyTorch looks the user up (getpass), so
+# uid 1000 gets a passwd entry.
+RUN useradd --uid 1000 --no-create-home --home-dir /tmp --shell /usr/sbin/nologin processor
 USER 1000
 
 ENTRYPOINT ["python3", "-m", "processor.entry"]

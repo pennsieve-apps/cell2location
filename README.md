@@ -85,13 +85,13 @@ is taken as the reference. The step is single-run: it writes at the root of each
 | `REFERENCE_EPOCHS` | `250` | Epochs of the reference regression model. |
 | `N_CELLS_PER_LOCATION` | `8` | Prior expected number of cells per spot; best estimated by counting nuclei in a few spots of the H&E. The lymph node tutorial uses 30 (a dense lymphoid tissue); the cell2location docs suggest 5-30 for Visium depending on the tissue. |
 | `DETECTION_ALPHA` | `20` | Regularisation of the per-spot detection efficiency: 20 when it varies within a slide (most data), 200 for very even data. |
-| `SPATIAL_EPOCHS` | `30000` | Epochs of the spatial model (the tutorial's value). On CPU this takes hours; see Runtime. |
+| `SPATIAL_EPOCHS` | `5000` (cpu), `30000` (gpu) | Epochs of the spatial model; 30000 is the tutorial's value. See Variants. |
 | `MIN_DOMINANT_FRACTION` | `0.4` | `dominant_type` is `Mixed` below this share of the spot's cells. |
 | `N_COLOCATION_GROUPS` | `0` | NMF groups; `0` chooses among 4-8 (see Method). |
 | `MAX_PLOTS` | `8` | Abundance maps for the this-many most abundant types per sample; `0` none. |
 | `SEED` | `42` | Seed for subsampling, initialisation, training and posterior sampling. |
 | `THREADS` | `0` | CPU threads (torch, BLAS); `0` = the container's CPU quota. |
-| `USE_GPU` | `auto` | `auto`: the GPU when torch sees one; `true`: same, with a warning when there is none; `false`: CPU. |
+| `USE_GPU` | `false` (cpu), `auto` (gpu) | `auto`: the GPU when torch sees one; `true`: same, with a warning when there is none; `false`: CPU. |
 
 Exit codes: `0` ok, `1` no usable input (no reference, no readable sample, reference or mapping
 failed, fewer than 50 shared genes), `2` bad parameters. A sample that cannot be read is logged
@@ -132,7 +132,85 @@ and skipped.
 
 ## Runtime
 
-{{RUNTIME}}
+Measured on the lymph node demo (one Visium section after `st-qc`: 3,928 spots; reference 7,269
+cells of 20 types; 24,117 reference genes after `filter_genes`, 17,375 shared with the spatial data)
+on an M-series Mac shared with other builds, so wall times carry some contention:
+
+| What | Native arm64 (venv) | Docker, linux/amd64 emulation, `--cpus 4` |
+|---|---|---|
+| Reference model, 250 epochs | 3.2 s/epoch on 4 threads (~13 min); 405-450 s on 10 threads | 4.6 s/epoch with 9,245 genes (stricter `filter_genes`), 1,152 s |
+| Spatial model, per epoch (17,375 genes) | 1.24 s on 4 threads, 0.63 s on 10 threads | 4.2 s |
+| Spatial model, per epoch (8,685 genes) | - | 2.2 s |
+| Peak memory | 10.1 GB max RSS for the whole run (reference model on 24,117 genes + spatial model on 17,375 genes); 6.3 GB for the spatial stage alone | > 6 GB (OOM-killed at `--memory 6g` during training with 17,375 genes; at `--memory 4g` after 2,000 epochs with 8,685 genes, during posterior export) |
+
+Memory grows with spots × genes (about 80 bytes per entry on top of ~1 GB), so the app asks
+for 4 vCPU / 16 GiB. The tutorial's 30000 spatial epochs on CPU would take about 10.5 h on 4
+threads (1.24 s × 30000, native arm64; slower in amd64 emulation, ~35 h); we did not run it to
+the end here (two attempts were stopped when the machine was shared, after the reference stage).
+That is why the variants below default to 5000 epochs on CPU and 30000 on a GPU, where the
+cell2location authors report the full training in minutes to tens of minutes per section.
+
+**The demo output** (`workflow-spatial-transcriptomics/data/work/lymph/deconvolution/`) is from
+`REFERENCE_BATCH_COLUMN=donor_id`, `SPATIAL_EPOCHS=2000`, everything else default, run
+natively on 10 threads (49 min: reference 9 min, spatial 2000 epochs 33 min, co-location 43 s; max RSS 10.1 GB; finished 10:26 EDT, 2026-10-30). See "Demo results" below.
+
+The image runs as uid 1000 with no network; `--memory` must be at least 8 GB for a Visium section
+with the default gene filter.
+
+## Variants
+
+One release builds two images (`app.yml` → `variants`, Dockerfile `ARG TORCH_FLAVOUR`):
+
+| Variant | Image | Compute | Defaults | Pick it when |
+|---|---|---|---|---|
+| `cpu` (default, "CPU") | CPU-only PyTorch 2.15.0+cpu from the PyTorch CPU index, no NVIDIA libraries: 0.50 GB compressed, ~2.2 GB unpacked | `standard`, 4 vCPU / 16 GiB, 8 h timeout | `SPATIAL_EPOCHS=5000`, `USE_GPU=false` | No GPU is available or a 2-hour run is fine. ~2 h for one section with the default genes (5000 × 1.24 s + reference). |
+| `gpu` ("GPU") | CUDA 13.2 PyTorch 2.15.0 (NVIDIA libraries as pip wheels; needs driver ≥ 580, T4 or newer): 3.3 GB compressed, ~6.6 GB unpacked | `gpu`, 14 GiB, 4 h timeout | `SPATIAL_EPOCHS=30000` (the tutorial's), `USE_GPU=auto` | A GPU is available: the full tutorial setting. |
+
+The GPU speed-up is **expected, not measured** here (no GPU on the build machine): the model is
+dense matrix algebra over spots × genes, and on a T4 we expect one to two orders of magnitude per
+epoch, i.e. the 30000 epochs in well under an hour for a Visium section. The cuda image was
+checked to start and fall back cleanly to CPU without a GPU (`USE_GPU=auto: cuda not available,
+using cpu`), and the cpu image ran the fixture in Docker as uid 1000 (316 s, cgroup peak 0.99 GB).
+
+**Quality trade-off of fewer epochs** (measured on the demo; no 30000-epoch CPU run was
+available to compare with): going from 1000 to 2000 epochs changed the abundances only a little
+(per-type correlation across spots median 0.95, lowest 0.75 for the small generic "T cell" type;
+mean |difference| of the per-spot proportions 0.009; dominant type unchanged in 98.7 % of spots;
+cell totals within 2 %) but sharpened the tissue structure: B cells in the top-10 % follicle-marker
+spots went from 1.3 to 2.3 cells per spot and the B/T anticorrelation across spots from -0.11 to
+-0.30. The loss is still falling at 2000 epochs (`training_history.png`), so 5000 epochs (the cpu
+default) is a compromise: the spatial pattern and the ranking of types are stable early, while the
+contrast between zones keeps improving towards the tutorial's 30000. Use the gpu variant when
+absolute abundances matter.
+
+## Demo results
+
+Human Lymph Node (10x Visium, 3,928 spots after st-qc) with the Tabula Sapiens lymph node
+reference (20 of 23 cell types kept; hematopoietic precursor cell, innate lymphoid cell and
+plasmacytoid dendritic cell have fewer than 20 cells), 2000 spatial epochs:
+
+- Genes: 24,117 reference genes pass `filter_genes`; 17,375 are shared with the section
+  (17,366 by Ensembl id, 9 by symbol; 13 mitochondrial genes left out). Reconstruction
+  correlation (log1p observed vs expected counts) 0.72 for the reference model and 0.82 for the
+  spatial model.
+- Mean 6.9 estimated cells per spot (q05). Largest shares: B cell 16 %, regulatory T cell 9 %,
+  plasma cell 9 %, erythrocyte 7 %, naive CD4 T cell 7 %, endothelial cell 6.5 %.
+- **Sanity check: B cells sit in the follicles, T cells in the paracortex.** The B cell abundance
+  correlates with the follicle markers MS4A1/CR2/CD19/FCER2/CXCL13 (r = 0.78), the summed T cell
+  abundance with the T-zone markers CCR7/CD3E/CD3D/LEF1/CCL19/CCL21 (r = 0.78), and B and T
+  abundances are anticorrelated (r = -0.30). In the 10 % of spots richest in follicle markers there
+  are 2.3 B vs 1.8 T cells per spot; in the 10 % richest in T-zone markers 0.4 B vs 5.0 T cells.
+- Co-location: 8 groups (4-8 all reproducible except 7), e.g. G01 B cells (+ myeloid dendritic
+  cells), G02 naive/CD4/CD8 T cells (T zone), G03 T/NK cells, G04 monocytes and dendritic cells,
+  G06 plasma cells with stromal and mast cells (medullary cords), G07 endothelial and stromal cells.
+- **Dominant type: 3,875 of 3,928 spots are `Mixed`** at the default `MIN_DOMINANT_FRACTION=0.4`
+  (53 are B cell). With 20 fine-grained types (six kinds of T cell) and ~7 cells per spot, one type
+  rarely holds 40 % of a spot. For a usable `dominant_type` on such a reference lower the threshold
+  (e.g. 0.2-0.25) or use a reference with coarser labels; `abundance.csv` and `proportions.csv` are
+  the primary output either way.
+- The erythrocyte share (7 %) comes from haemoglobin transcripts in vessels and blood-filled
+  sinuses; the reference has no germinal-centre B cells or follicular dendritic cells as separate
+  types, so germinal centres appear as B cell (+ myeloid dendritic cell) spots.
 
 ## Limitations
 
@@ -148,7 +226,7 @@ and skipped.
   smoother and their totals lower; check `training_history.png` (the loss should have flattened)
   and `reconstruction_qc.png`.
 - **Spot-based data only.** For single-cell platforms (Xenium, MERSCOPE, CosMx) use `st-celltype`.
-  Training holds every spot × gene in memory at once (about {{BYTES}} bytes per spot-gene entry);
+  Training holds every spot × gene in memory at once (about 80 bytes per spot-gene entry);
   Visium HD bins at 8 µm (hundreds of thousands of bins) do not fit and are out of scope.
 - `Mixed` is a threshold on the q05 shares, not a statement that a spot holds several types in
   equal amounts.
@@ -162,6 +240,8 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 make test PYTHON=.venv/bin/python      # pytest on the synthetic fixture (~1.5 min)
 make run PYTHON=.venv/bin/python       # Docker over the fixture -> data/output/{labels,model}/
 make validate PYTHON=.venv/bin/python  # app.yml against the manifest schema, CITATION.cff
+docker build --platform linux/amd64 --build-arg TORCH_FLAVOUR=cpu  -t cell2location:cpu .
+docker build --platform linux/amd64 --build-arg TORCH_FLAVOUR=cuda -t cell2location:cuda .
 ```
 
 `sample-input/README.md` describes the fixture and how to run the lymph node demo. On a machine

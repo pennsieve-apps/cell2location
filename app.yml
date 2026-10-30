@@ -22,14 +22,15 @@ application:
     - cell-type-mapping
     - cell2location
 runtime:
+  # Shared by both variants (below), these are the cpu variant's values. Measured on the lymph node
+  # demo (3,928 spots x 17,375 genes, 20 cell types): peak RSS 6.3 GB; spatial model 1.2 s/epoch on 4
+  # CPU threads (native arm64), 4.2 s/epoch in amd64 emulation; reference model ~13 min on 4 threads.
+  # The cpu variant defaults to SPATIAL_EPOCHS=5000 (~2 h on 4 vCPU); see README "Variants".
   cpu: 4096
   memory: 16384
-  # One image (CUDA build of torch) serves both: standard runs on CPU, gpu uses the GPU when torch
-  # sees one (USE_GPU=auto). See the README for measured time and memory.
   computeTypes:
     - standard
-    - gpu
-  timeoutSeconds: 43200
+  timeoutSeconds: 28800
 parameters:
   - name: CELL_TYPE_COLUMN
     type: string
@@ -82,9 +83,10 @@ parameters:
   - name: SPATIAL_EPOCHS
     type: integer
     description: >-
-      Training epochs of the spatial mapping model (the tutorial uses 30000; 5000 on CPU gives a
-      close approximation in a fraction of the time, see the README).
-    defaultValue: 30000
+      Training epochs of the spatial mapping model. The tutorial uses 30000 (the gpu variant's
+      default); the cpu variant defaults to 5000 to finish in about 2 hours on 4 vCPU (see the
+      README for the quality trade-off).
+    defaultValue: 5000
   - name: MIN_DOMINANT_FRACTION
     type: number
     description: A spot's dominant_type is Mixed when its most abundant type holds less than this fraction of its cells.
@@ -111,8 +113,8 @@ parameters:
     type: string
     description: >-
       auto (use the GPU when torch sees one), true (same, warning when there is none) or false
-      (always CPU).
-    defaultValue: "auto"
+      (always CPU). The cpu variant's image has no CUDA libraries.
+    defaultValue: "false"
 # Each input in its own folder (placement: subfolder) when linked; without links the files are found
 # by name anywhere under INPUT_DIR.
 inputs:
@@ -169,3 +171,32 @@ outputs:
     mediaTypes:
       - text/csv
       - application/json
+variants:
+  - id: cpu
+    name: CPU
+    default: true
+    description: >-
+      CPU-only PyTorch on a standard task; 5000 spatial epochs by default (about 2 hours for a
+      4,000-spot Visium section on 4 vCPU).
+    build:
+      args:
+        TORCH_FLAVOUR: cpu
+    runtime:
+      computeTypes: [standard]
+  - id: gpu
+    name: GPU
+    description: >-
+      CUDA PyTorch on an NVIDIA GPU (T4 or newer); the tutorial's full 30000 spatial epochs, expected
+      to take well under an hour per Visium section.
+    build:
+      args:
+        TORCH_FLAVOUR: cuda
+    runtime:
+      computeTypes: [gpu]
+      memory: 14336
+      timeoutSeconds: 14400
+    parameters:
+      SPATIAL_EPOCHS:
+        defaultValue: 30000
+      USE_GPU:
+        defaultValue: "auto"

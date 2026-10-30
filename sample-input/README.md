@@ -46,10 +46,10 @@ Then (input folders as the platform would link them):
 ```sh
 mkdir -p in && ln -s /path/to/st-qc/output/spatial in/spatial \
   && ln -s /path/to/st-prep/output/metadata in/metadata && ln -s /path/to/reference-folder in/reference
-docker run --rm --platform linux/amd64 --memory 4g --cpus 4 --network none \
+docker run --rm --platform linux/amd64 --memory 12g --cpus 4 --network none \
   -e INPUT_DIR=/data/input -e OUTPUT_DIR=/data/output -e REFERENCE_BATCH_COLUMN=donor_id \
-  -e SPATIAL_EPOCHS=5000 \
-  -v "$PWD/in:/data/input:ro" -v "$PWD/data/output:/data/output" cell2location:dev
+  -e SPATIAL_EPOCHS=2000 \
+  -v "$PWD/in:/data/input:ro" -v "$PWD/data/output:/data/output" cell2location:cpu
 ```
 
 (Docker does not follow symlinks into folders outside the mount; on a laptop copy the three

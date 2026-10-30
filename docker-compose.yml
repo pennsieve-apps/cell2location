@@ -3,8 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: cell2location:dev
+      args:
+        TORCH_FLAVOUR: cpu
+    image: cell2location:cpu
     platform: linux/amd64
+    user: "1000"
     mem_limit: 4g
     cpus: 4
     network_mode: none

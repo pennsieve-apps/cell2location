@@ -1,13 +1,12 @@
-# Installed with `pip install --no-deps -r requirements.txt`: the complete, pinned set as resolved for
-# linux/amd64 (python 3.12). torch is the default PyPI wheel, built against CUDA 13.2 (the nvidia-* and
-# triton packages below), so one image serves the standard (cpu) and the gpu runtime; see the README.
+# Installed with `pip install --no-deps -r requirements.txt -r requirements-${TORCH_FLAVOUR}.txt`: the
+# complete, pinned set as resolved for linux/amd64 (python 3.12), except PyTorch, which comes from
+# requirements-cpu.txt (cpu variant) or requirements-cuda.txt (gpu variant).
 # opencv-python, a declared dependency of cell2location used only by cell2location.plt.RotateCrop (never
 # imported here), is left out.
 
 # Direct dependencies
 cell2location==0.1.5
 scvi-tools==1.5.2
-torch==2.15.0
 pyro-ppl==1.9.1  # 1.9.2 removed pyro.infer.autoguide.utils.deep_getattr, which cell2location 0.1.5 imports
 lightning==2.6.6
 scanpy==1.12.5
@@ -31,9 +30,6 @@ attrs==26.1.0
 certifi==2026.10.23
 cloudpickle==3.1.2
 contourpy==1.4.0
-cuda-bindings==13.4.4
-cuda-pathfinder==1.8.5
-cuda-toolkit==13.2.2
 cycler==0.12.1
 docrep==0.3.2
 donfig==0.8.1.post1
@@ -67,21 +63,6 @@ natsort==8.4.0
 networkx==3.7
 numba==0.68.1
 numcodecs==0.17.1
-nvidia-cublas==13.4.1.3
-nvidia-cuda-cccl==13.3.4.3.1
-nvidia-cuda-cupti==13.2.86
-nvidia-cuda-nvrtc==13.2.86
-nvidia-cuda-runtime==13.2.86
-nvidia-cudnn-cu13==9.26.0.51
-nvidia-cufft==12.2.0.57
-nvidia-cufile==1.17.1.22
-nvidia-cusolver==12.2.0.11
-nvidia-cusparse==12.7.10.12
-nvidia-cusparselt-cu13==0.8.1
-nvidia-nccl-cu13==2.30.7
-nvidia-nvjitlink==13.4.92
-nvidia-nvshmem-cu13==3.7.2
-nvidia-nvtx==13.2.86
 opt_einsum==3.4.0
 packaging==26.3
 patsy==1.0.3
@@ -113,7 +94,6 @@ tensorboard==2.21.0
 threadpoolctl==3.7.0
 torchmetrics==1.9.0
 tqdm==4.70.1
-triton==3.9.0
 typing-inspection==0.4.4
 typing_extensions==4.16.0
 tzdata==2026.6

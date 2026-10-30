@@ -58,13 +58,13 @@ DEFAULTS = {
     "REFERENCE_EPOCHS": "250",
     "N_CELLS_PER_LOCATION": "8",
     "DETECTION_ALPHA": "20",
-    "SPATIAL_EPOCHS": "30000",
+    "SPATIAL_EPOCHS": "5000",      # cpu variant; the gpu variant sets 30000 (app.yml)
     "MIN_DOMINANT_FRACTION": "0.4",
     "N_COLOCATION_GROUPS": "0",
     "MAX_PLOTS": "8",
     "SEED": "42",
     "THREADS": "0",
-    "USE_GPU": "auto",
+    "USE_GPU": "false",           # cpu variant; the gpu variant sets auto
 }
 PARAMETERS = tuple(DEFAULTS)
 MIN_GENES_MATCHED = 50          # below this the mapping is not worth running
