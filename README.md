@@ -101,7 +101,11 @@ and skipped.
 
 `labels/`
 
-- `labels.csv`: `sample_id, obs_id, dominant_type` (every spot of every sample).
+- `labels.csv`: `sample_id, obs_id, dominant_type, colocation_group` (every spot of every sample).
+  `colocation_group` is the spot's strongest co-location group (`G01`, ...; the largest loading in
+  `colocation_by_obs.csv`), present when the co-location NMF ran. Every spot has one, so it is the
+  label to use for niche analysis (st-niches `LABEL_COLUMN=colocation_group`); `dominant_type` is
+  mostly `Mixed` on a fine-grained reference (below).
 - `abundance.csv`: `sample_id, obs_id`, one column per cell type: q05 posterior number of cells.
 - `proportions.csv`: the same divided by each spot's total.
 - `colocation.csv`: `group, cell_type, weight` (the fraction of that cell type's abundance
@@ -206,8 +210,9 @@ plasmacytoid dendritic cell have fewer than 20 cells), 2000 spatial epochs:
 - **Dominant type: 3,875 of 3,928 spots are `Mixed`** at the default `MIN_DOMINANT_FRACTION=0.4`
   (53 are B cell). With 20 fine-grained types (six kinds of T cell) and ~7 cells per spot, one type
   rarely holds 40 % of a spot. For a usable `dominant_type` on such a reference lower the threshold
-  (e.g. 0.2-0.25) or use a reference with coarser labels; `abundance.csv` and `proportions.csv` are
-  the primary output either way.
+  (even at 0.2, 2,482 spots stay `Mixed` here) or use a reference with coarser labels. `colocation_group`
+  labels every spot instead: G01 1,428, G02 619, G03 601, G05 359, G06 293, G04 286, G07 264, G08 78.
+  `abundance.csv` and `proportions.csv` are the primary output either way.
 - The erythrocyte share (7 %) comes from haemoglobin transcripts in vessels and blood-filled
   sinuses; the reference has no germinal-centre B cells or follicular dendritic cells as separate
   types, so germinal centres appear as B cell (+ myeloid dendritic cell) spots.

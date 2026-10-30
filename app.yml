@@ -151,7 +151,7 @@ inputs:
 outputs:
   - name: labels
     description: >-
-      labels.csv (sample_id, obs_id, dominant_type), abundance.csv (sample_id, obs_id, one column per
+      labels.csv (sample_id, obs_id, dominant_type, colocation_group), abundance.csv (sample_id, obs_id, one column per
       cell type - q05 posterior cell abundance), proportions.csv (abundance / spot total),
       colocation.csv (group, cell_type, weight), colocation_by_obs.csv (sample_id, obs_id, one column
       per group), type_summary.csv (sample_id, cell_type, total_abundance, mean_abundance,

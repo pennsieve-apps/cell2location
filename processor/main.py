@@ -13,7 +13,7 @@ official cell2location tutorial (Kleshchevnikov et al. 2022):
 
 and writes
 
-  labels/labels.csv              sample_id, obs_id, dominant_type
+  labels/labels.csv              sample_id, obs_id, dominant_type, colocation_group (strongest NMF group)
   labels/abundance.csv           sample_id, obs_id, one column per cell type (q05 cells per spot)
   labels/proportions.csv         the same, divided by each spot's total
   labels/colocation.csv          group, cell_type, weight
@@ -438,7 +438,6 @@ def main() -> int:
     sample_of = vis.obs["sample_id"].astype(str)
     dominant, dom_frac = M.dominant_types(q05, params["MIN_DOMINANT_FRACTION"])
     ids = pd.DataFrame({"sample_id": sample_of.values, "obs_id": q05.index.astype(str)}, index=q05.index)
-    write_frame(out_labels / "labels.csv", ids.assign(dominant_type=dominant.values))
     write_frame(out_labels / "abundance.csv", pd.concat([ids, q05], axis=1))
     totals = q05.sum(axis=1)
     props = q05.div(totals.replace(0, np.nan), axis=0).fillna(0.0)
@@ -454,6 +453,14 @@ def main() -> int:
         write_frame(out_labels / "colocation_by_obs.csv", pd.concat([ids, by_obs.loc[ids.index]], axis=1))
     except Exception as exc:   # the abundances stand without the co-location groups
         log.exception("co-location NMF failed: %s", exc)
+    # labels.csv: the dominant cell type, and (when the NMF ran) each spot's strongest co-location
+    # group. With a fine-grained reference a spot rarely has one dominant type (most are 'Mixed'),
+    # while every spot has a strongest group, so colocation_group is the label for niche analysis.
+    labels = ids.assign(dominant_type=dominant.values)
+    if coloc is not None:
+        g = coloc["by_obs"].loc[ids.index]
+        labels["colocation_group"] = g.idxmax(axis=1).where(g.max(axis=1) > 0, "None").values
+    write_frame(out_labels / "labels.csv", labels)
     timings["colocation"] = round(time.monotonic() - t, 1)
     rss["colocation"] = peak_rss_mb()
 
@@ -535,6 +542,7 @@ def main() -> int:
                     "mean_cells_per_obs": round(float(totals.mean()), 3), "device": accelerator},
         "dominant_type_counts": {str(k): int(v) for k, v in dominant.value_counts().items()},
         "n_mixed": int((dominant == "Mixed").sum()), "min_dominant_fraction": params["MIN_DOMINANT_FRACTION"],
+        "colocation_group_counts": {} if coloc is None else {str(k): int(v) for k, v in labels["colocation_group"].value_counts().items()},
         "colocation": None if coloc is None else {
             "n_groups": coloc["n_groups"], "reason": coloc["reason"], "candidates": coloc["candidates"],
             "groups": coloc["group_summary"]},

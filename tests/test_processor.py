@@ -58,7 +58,8 @@ def test_outputs_follow_the_contract(linked_run, fixture_root):
     assert not [p for p in model.rglob("*") if p.suffix in (".pt", ".pkl", ".h5ad")]   # no model objects
 
     lab = pd.read_csv(labels / "labels.csv")
-    assert list(lab.columns) == ["sample_id", "obs_id", "dominant_type"]
+    assert list(lab.columns) == ["sample_id", "obs_id", "dominant_type", "colocation_group"]
+    assert lab["colocation_group"].str.match(r"^G\d\d$").all()   # every spot gets a group
     n = sum(ad.read_h5ad(fixture_root / "linked" / "spatial" / f"{s}.h5ad").n_obs for s in FX.SAMPLES)
     assert len(lab) == n and lab["obs_id"].is_unique
     assert set(lab["sample_id"]) == set(FX.SAMPLES)
