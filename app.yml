@@ -70,8 +70,8 @@ parameters:
   - name: N_CELLS_PER_LOCATION
     type: number
     description: >-
-      Expected number of cells per spot (the prior of cell2location), best estimated from the
-      histology; 8 for the lymph node tutorial, often 5-30 for Visium.
+      Expected number of cells per spot (the prior of cell2location), best estimated by counting
+      nuclei on the H&E; typically 5-30 for Visium (the lymph node tutorial uses 30).
     defaultValue: 8
   - name: DETECTION_ALPHA
     type: number

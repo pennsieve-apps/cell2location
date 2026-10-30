@@ -573,11 +573,12 @@ def method_text(p: dict) -> dict:
                     "abundance = q05 of the posterior cell abundance (1000 samples)"),
         "dominant_type": (f"cell type with the largest q05 abundance; 'Mixed' when it holds < MIN_DOMINANT_FRACTION="
                           f"{p['MIN_DOMINANT_FRACTION']:g} of the spot's total q05 abundance"),
-        "colocation": ("cell2location.run_colocation(CoLocatedGroupsSklearnNMF, init='random', alpha=0.01, n_restarts=5, "
-                       "n_iter=20000) on the q05 abundances; "
+        "colocation": ("cell2location CoLocatedGroupsSklearnNMF (the run_colocation model: init='random', l1_ratio=0.5, "
+                       "n_iter=20000, 5 restarts) on the q05 abundances, regularisation alpha=0.01 passed as "
+                       "alpha_W=0.01/n_cell_types, alpha_H=0.01/n_locations (scikit-learn >= 1.2 scales alpha); "
                        + (f"N_COLOCATION_GROUPS={p['N_COLOCATION_GROUPS']}" if p["N_COLOCATION_GROUPS"] else
-                          "4-8 groups tried, the largest whose cell-type loadings are stable across the restarts "
-                          f"(mean aligned correlation >= {0.9}) kept")),
+                          "4-8 groups tried, the largest reproducible on 5 seeded 80 % subsamples of the locations "
+                          "(worst-matched group's cell-type loadings correlate >= 0.9 on average) kept")),
     }
 
 
