@@ -1,0 +1,527 @@
+cff-version: "1.2.0"
+message: If you use this app, please cite it and the works it builds on, listed under references.
+type: software
+title: cell2location
+abstract: Cell-type deconvolution of spot-based spatial transcriptomics (10x Visium) with a single-cell
+  RNA-seq reference, using cell2location. Estimates reference cell-type signatures with cell2location's
+  negative-binomial regression model, maps them onto every spot of all samples jointly (absolute cell
+  abundance per cell type, q05 posterior), labels each spot with its dominant cell type, and finds groups
+  of co-located cell types with cell2location's NMF, with per-sample tables and figures.
+authors:
+- name: Pennsieve (University of Pennsylvania)
+repository-code: https://github.com/pennsieve-apps/cell2location
+license: Apache-2.0
+keywords:
+- spatial-transcriptomics
+- transcriptomics
+- genomics
+- single-cell
+- visium
+- deconvolution
+- cell-type-mapping
+- cell2location
+references:
+- type: article
+  title: Cell2location maps fine-grained cell types in spatial transcriptomics
+  authors:
+  - family-names: Kleshchevnikov
+    given-names: Vitalii
+  - family-names: Shmatko
+    given-names: Artem
+  - family-names: Dann
+    given-names: Emma
+  - family-names: Aivazidis
+    given-names: Alexander
+  - family-names: King
+    given-names: Hamish W.
+  - family-names: Li
+    given-names: Tong
+  - family-names: Elmentaite
+    given-names: Rasa
+  - family-names: Lomakin
+    given-names: Artem
+  - family-names: Kedlian
+    given-names: Veronika
+  - family-names: Gayoso
+    given-names: Adam
+  - family-names: Jain
+    given-names: Mika Sarkin
+  - family-names: Park
+    given-names: Jun Sung
+  - family-names: Ramona
+    given-names: Lauma
+  - family-names: Tuck
+    given-names: Elizabeth
+  - family-names: Arutyunyan
+    given-names: Anna
+  - family-names: Vento-Tormo
+    given-names: Roser
+  - family-names: Gerstung
+    given-names: Moritz
+  - family-names: James
+    given-names: Louisa
+  - family-names: Stegle
+    given-names: Oliver
+  - family-names: Bayraktar
+    given-names: Omer Ali
+  year: 2022
+  journal: Nature Biotechnology
+  volume: 40
+  issue: '5'
+  start: '661'
+  end: '671'
+  doi: 10.1038/s41587-021-01139-4
+  identifiers:
+  - type: other
+    value: 'pmid:35027729'
+    description: PubMed ID
+- type: article
+  title: A Python library for probabilistic analysis of single-cell omics data
+  authors:
+  - family-names: Gayoso
+    given-names: Adam
+  - family-names: Lopez
+    given-names: Romain
+  - family-names: Xing
+    given-names: Galen
+  - family-names: Boyeau
+    given-names: Pierre
+  - family-names: Valiollah Pour Amiri
+    given-names: Valeh
+  - family-names: Hong
+    given-names: Justin
+  - family-names: Wu
+    given-names: Katherine
+  - family-names: Jayasuriya
+    given-names: Michael
+  - family-names: Mehlman
+    given-names: Edouard
+  - family-names: Langevin
+    given-names: Maxime
+  - family-names: Liu
+    given-names: Yining
+  - family-names: Samaran
+    given-names: Jules
+  - family-names: Misrachi
+    given-names: Gabriel
+  - family-names: Nazaret
+    given-names: Achille
+  - family-names: Clivio
+    given-names: Oscar
+  - family-names: Xu
+    given-names: Chenling
+  - family-names: Ashuach
+    given-names: Tal
+  - family-names: Gabitto
+    given-names: Mariano
+  - family-names: Lotfollahi
+    given-names: Mohammad
+  - family-names: Svensson
+    given-names: Valentine
+  - family-names: da Veiga Beltrame
+    given-names: Eduardo
+  - family-names: Kleshchevnikov
+    given-names: Vitalii
+  - family-names: Talavera-López
+    given-names: Carlos
+  - family-names: Pachter
+    given-names: Lior
+  - family-names: Theis
+    given-names: Fabian J.
+  - family-names: Streets
+    given-names: Aaron
+  - family-names: Jordan
+    given-names: Michael I.
+  - family-names: Regier
+    given-names: Jeffrey
+  - family-names: Yosef
+    given-names: Nir
+  year: 2022
+  journal: Nature Biotechnology
+  volume: 40
+  issue: '2'
+  start: '163'
+  end: '166'
+  doi: 10.1038/s41587-021-01206-w
+  identifiers:
+  - type: other
+    value: 'pmid:35132262'
+    description: PubMed ID
+- type: article
+  title: 'SCANPY: large-scale single-cell gene expression data analysis'
+  authors:
+  - family-names: Wolf
+    given-names: F. Alexander
+  - family-names: Angerer
+    given-names: Philipp
+  - family-names: Theis
+    given-names: Fabian J.
+  year: 2018
+  journal: Genome Biology
+  volume: 19
+  issue: '1'
+  start: '15'
+  doi: 10.1186/s13059-017-1382-0
+  identifiers:
+  - type: other
+    value: 'pmid:29409532'
+    description: PubMed ID
+- type: article
+  title: 'anndata: Access and store annotated data matrices'
+  authors:
+  - family-names: Virshup
+    given-names: Isaac
+  - family-names: Rybakov
+    given-names: Sergei
+  - family-names: Theis
+    given-names: Fabian J.
+  - family-names: Angerer
+    given-names: Philipp
+  - family-names: Wolf
+    given-names: F. Alexander
+  year: 2024
+  journal: Journal of Open Source Software
+  volume: 9
+  issue: '101'
+  start: '4371'
+  doi: 10.21105/joss.04371
+- type: article
+  title: 'The Tabula Sapiens: A multiple-organ, single-cell transcriptomic atlas of humans'
+  authors:
+  - name: 'The Tabula Sapiens Consortium*'
+  - family-names: Jones
+    given-names: Robert C.
+  - family-names: Karkanias
+    given-names: Jim
+  - family-names: Krasnow
+    given-names: Mark A.
+  - family-names: Pisco
+    given-names: Angela Oliveira
+  - family-names: Quake
+    given-names: Stephen R.
+  - family-names: Salzman
+    given-names: Julia
+  - family-names: Yosef
+    given-names: Nir
+  - family-names: Bulthaup
+    given-names: Bryan
+  - family-names: Brown
+    given-names: Phillip
+  - family-names: Harper
+    given-names: William
+  - family-names: Hemenez
+    given-names: Marisa
+  - family-names: Ponnusamy
+    given-names: Ravikumar
+  - family-names: Salehi
+    given-names: Ahmad
+  - family-names: Sanagavarapu
+    given-names: Bhavani A.
+  - family-names: Spallino
+    given-names: Eileen
+  - family-names: Aaron
+    given-names: Ksenia A.
+  - family-names: Concepcion
+    given-names: Waldo
+  - family-names: Gardner
+    given-names: James M.
+  - family-names: Kelly
+    given-names: Burnett
+  - family-names: Neidlinger
+    given-names: Nikole
+  - family-names: Wang
+    given-names: Zifa
+  - family-names: Crasta
+    given-names: Sheela
+  - family-names: Kolluru
+    given-names: Saroja
+  - family-names: Morri
+    given-names: Maurizio
+  - family-names: Tan
+    given-names: Serena Y.
+  - family-names: Travaglini
+    given-names: Kyle J.
+  - family-names: Xu
+    given-names: Chenling
+  - family-names: Alcántara-Hernández
+    given-names: Marcela
+  - family-names: Almanzar
+    given-names: Nicole
+  - family-names: Antony
+    given-names: Jane
+  - family-names: Beyersdorf
+    given-names: Benjamin
+  - family-names: Burhan
+    given-names: Deviana
+  - family-names: Calcuttawala
+    given-names: Kruti
+  - family-names: Carter
+    given-names: Matthew M.
+  - family-names: Chan
+    given-names: Charles K. F.
+  - family-names: Chang
+    given-names: Charles A.
+  - family-names: Chang
+    given-names: Stephen
+  - family-names: Colville
+    given-names: Alex
+  - family-names: Culver
+    given-names: Rebecca N.
+  - family-names: Cvijović
+    given-names: Ivana
+  - family-names: D’Amato
+    given-names: Gaetano
+  - family-names: Ezran
+    given-names: Camille
+  - family-names: Galdos
+    given-names: Francisco X.
+  - family-names: Gillich
+    given-names: Astrid
+  - family-names: Goodyer
+    given-names: William R.
+  - family-names: Hang
+    given-names: Yan
+  - family-names: Hayashi
+    given-names: Alyssa
+  - family-names: Houshdaran
+    given-names: Sahar
+  - family-names: Huang
+    given-names: Xianxi
+  - family-names: Irwin
+    given-names: Juan C.
+  - family-names: Jang
+    given-names: SoRi
+  - family-names: Juanico
+    given-names: Julia Vallve
+  - family-names: Kershner
+    given-names: Aaron M.
+  - family-names: Kim
+    given-names: Soochi
+  - family-names: Kiss
+    given-names: Bernhard
+  - family-names: Kong
+    given-names: William
+  - family-names: Kumar
+    given-names: Maya E.
+  - family-names: Kuo
+    given-names: Angera H.
+  - family-names: Leylek
+    given-names: Rebecca
+  - family-names: Li
+    given-names: Baoxiang
+  - family-names: Loeb
+    given-names: Gabriel B.
+  - family-names: Lu
+    given-names: Wan-Jin
+  - family-names: Mantri
+    given-names: Sruthi
+  - family-names: Markovic
+    given-names: Maxim
+  - family-names: McAlpine
+    given-names: Patrick L.
+  - family-names: de Morree
+    given-names: Antoine
+  - family-names: Mrouj
+    given-names: Karim
+  - family-names: Mukherjee
+    given-names: Shravani
+  - family-names: Muser
+    given-names: Tyler
+  - family-names: Neuhöfer
+    given-names: Patrick
+  - family-names: Nguyen
+    given-names: Thi D.
+  - family-names: Perez
+    given-names: Kimberly
+  - family-names: Phansalkar
+    given-names: Ragini
+  - family-names: Puluca
+    given-names: Nazan
+  - family-names: Qi
+    given-names: Zhen
+  - family-names: Rao
+    given-names: Poorvi
+  - family-names: Raquer-McKay
+    given-names: Hayley
+  - family-names: Schaum
+    given-names: Nicholas
+  - family-names: Scott
+    given-names: Bronwyn
+  - family-names: Seddighzadeh
+    given-names: Bobak
+  - family-names: Segal
+    given-names: Joe
+  - family-names: Sen
+    given-names: Sushmita
+  - family-names: Sikandar
+    given-names: Shaheen
+  - family-names: Spencer
+    given-names: Sean P.
+  - family-names: Steffes
+    given-names: Lea C.
+  - family-names: Subramaniam
+    given-names: Varun R.
+  - family-names: Swarup
+    given-names: Aditi
+  - family-names: Swift
+    given-names: Michael
+  - family-names: Van Treuren
+    given-names: Will
+  - family-names: Trimm
+    given-names: Emily
+  - family-names: Veizades
+    given-names: Stefan
+  - family-names: Vijayakumar
+    given-names: Sivakamasundari
+  - family-names: Vo
+    given-names: Kim Chi
+  - family-names: Vorperian
+    given-names: Sevahn K.
+  - family-names: Wang
+    given-names: Wanxin
+  - family-names: Weinstein
+    given-names: Hannah N. W.
+  - family-names: Winkler
+    given-names: Juliane
+  - family-names: Wu
+    given-names: Timothy T. H.
+  - family-names: Xie
+    given-names: Jamie
+  - family-names: Yung
+    given-names: Andrea R.
+  - family-names: Zhang
+    given-names: Yue
+  - family-names: Detweiler
+    given-names: Angela M.
+  - family-names: Mekonen
+    given-names: Honey
+  - family-names: Neff
+    given-names: Norma F.
+  - family-names: Sit
+    given-names: Rene V.
+  - family-names: Tan
+    given-names: Michelle
+  - family-names: Yan
+    given-names: Jia
+  - family-names: Bean
+    given-names: Gregory R.
+  - family-names: Charu
+    given-names: Vivek
+  - family-names: Forgó
+    given-names: Erna
+  - family-names: Martin
+    given-names: Brock A.
+  - family-names: Ozawa
+    given-names: Michael G.
+  - family-names: Silva
+    given-names: Oscar
+  - family-names: Toland
+    given-names: Angus
+  - family-names: Vemuri
+    given-names: Venkata N. P.
+  - family-names: Afik
+    given-names: Shaked
+  - family-names: Awayan
+    given-names: Kyle
+  - family-names: Botvinnik
+    given-names: Olga Borisovna
+  - family-names: Byrne
+    given-names: Ashley
+  - family-names: Chen
+    given-names: Michelle
+  - family-names: Dehghannasiri
+    given-names: Roozbeh
+  - family-names: Gayoso
+    given-names: Adam
+  - family-names: Granados
+    given-names: Alejandro A.
+  - family-names: Li
+    given-names: Qiqing
+  - family-names: Mahmoudabadi
+    given-names: Gita
+  - family-names: McGeever
+    given-names: Aaron
+  - family-names: Olivieri
+    given-names: Julia Eve
+  - family-names: Park
+    given-names: Madeline
+  - family-names: Ravikumar
+    given-names: Neha
+  - family-names: Stanley
+    given-names: Geoff
+  - family-names: Tan
+    given-names: Weilun
+  - family-names: Tarashansky
+    given-names: Alexander J.
+  - family-names: Vanheusden
+    given-names: Rohan
+  - family-names: Wang
+    given-names: Peter
+  - family-names: Wang
+    given-names: Sheng
+  - family-names: Xing
+    given-names: Galen
+  - family-names: Dethlefsen
+    given-names: Les
+  - family-names: Ho
+    given-names: Po-Yi
+  - family-names: Liu
+    given-names: Shixuan
+  - family-names: Maltzman
+    given-names: Jonathan S.
+  - family-names: Metzger
+    given-names: Ross J.
+  - family-names: Sasagawa
+    given-names: Koki
+  - family-names: Sinha
+    given-names: Rahul
+  - family-names: Song
+    given-names: Hanbing
+  - family-names: Wang
+    given-names: Bruce
+  - family-names: Artandi
+    given-names: Steven E.
+  - family-names: Beachy
+    given-names: Philip A.
+  - family-names: Clarke
+    given-names: Michael F.
+  - family-names: Giudice
+    given-names: Linda C.
+  - family-names: Huang
+    given-names: Franklin W.
+  - family-names: Huang
+    given-names: Kerwyn Casey
+  - family-names: Idoyaga
+    given-names: Juliana
+  - family-names: Kim
+    given-names: Seung K.
+  - family-names: Kuo
+    given-names: Christin S.
+  - family-names: Nguyen
+    given-names: Patricia
+  - family-names: Rando
+    given-names: Thomas A.
+  - family-names: Red-Horse
+    given-names: Kristy
+  - family-names: Reiter
+    given-names: Jeremy
+  - family-names: Relman
+    given-names: David A.
+  - family-names: Sonnenburg
+    given-names: Justin L.
+  - family-names: Wu
+    given-names: Albert
+  - family-names: Wu
+    given-names: Sean M.
+  - family-names: Wyss-Coray
+    given-names: Tony
+  year: 2022
+  journal: Science
+  volume: 376
+  issue: '6594'
+  start: 'eabl4896'
+  doi: 10.1126/science.abl4896
+  identifiers:
+  - type: other
+    value: 'pmid:35549404'
+    description: PubMed ID

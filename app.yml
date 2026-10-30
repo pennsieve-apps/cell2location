@@ -1,0 +1,171 @@
+# yaml-language-server: $schema=https://schemas.pennsieve.io/app-manifest/v1.json
+schemaVersion: "1.0"
+application:
+  name: cell2location
+  description: >-
+    Cell-type deconvolution of spot-based spatial transcriptomics (10x Visium) with a single-cell
+    RNA-seq reference, using cell2location (Kleshchevnikov et al. 2022) as in its official lymph
+    node tutorial. Learns a reference expression signature per cell type with cell2location's
+    negative-binomial regression model (or takes a signatures.csv from an earlier run), maps the
+    signatures onto every spot of all samples jointly to estimate the absolute number of cells of
+    each type per spot (q05 posterior), labels each spot with its dominant cell type (Mixed when no
+    type dominates), and finds groups of co-located cell types (tissue zones) with cell2location's
+    NMF. Runs on CPU, and on a GPU when the step has one (much faster).
+  type: processor
+  tags:
+    - spatial-transcriptomics
+    - transcriptomics
+    - genomics
+    - single-cell
+    - visium
+    - deconvolution
+    - cell-type-mapping
+    - cell2location
+runtime:
+  cpu: 4096
+  memory: 16384
+  # One image (CUDA build of torch) serves both: standard runs on CPU, gpu uses the GPU when torch
+  # sees one (USE_GPU=auto). See the README for measured time and memory.
+  computeTypes:
+    - standard
+    - gpu
+  timeoutSeconds: 43200
+parameters:
+  - name: CELL_TYPE_COLUMN
+    type: string
+    description: Column of the reference's obs holding the cell type of each cell.
+    defaultValue: "cell_type"
+  - name: REFERENCE_BATCH_COLUMN
+    type: string
+    description: >-
+      Optional column of the reference's obs with the batch (donor, sample, 10x chemistry) whose
+      technical effect the regression model removes from the signatures. Empty: one batch.
+    defaultValue: ""
+  - name: MIN_CELLS_PER_TYPE
+    type: integer
+    description: Cell types with fewer reference cells than this are dropped (too few to estimate a signature).
+    defaultValue: 20
+  - name: MAX_CELLS_PER_TYPE
+    type: integer
+    description: Reference cells per type are subsampled (seeded) to at most this many; 0 keeps every cell.
+    defaultValue: 2000
+  - name: CELL_COUNT_CUTOFF
+    type: number
+    description: filter_genes cell_count_cutoff - genes detected in fewer reference cells than this are always dropped.
+    defaultValue: 5
+  - name: CELL_PERCENTAGE_CUTOFF2
+    type: number
+    description: filter_genes cell_percentage_cutoff2 - genes detected in at least this fraction of reference cells are always kept.
+    defaultValue: 0.03
+  - name: NONZ_MEAN_CUTOFF
+    type: number
+    description: >-
+      filter_genes nonz_mean_cutoff - genes in between are kept when their mean expression in the
+      cells that express them is above this.
+    defaultValue: 1.12
+  - name: REFERENCE_EPOCHS
+    type: integer
+    description: Training epochs of the reference regression model (the tutorial uses 250).
+    defaultValue: 250
+  - name: N_CELLS_PER_LOCATION
+    type: number
+    description: >-
+      Expected number of cells per spot (the prior of cell2location), best estimated from the
+      histology; 8 for the lymph node tutorial, often 5-30 for Visium.
+    defaultValue: 8
+  - name: DETECTION_ALPHA
+    type: number
+    description: >-
+      Regularisation of the per-spot RNA detection sensitivity; 20 when it varies a lot within a
+      slide (the tutorial default), 200 when it does not.
+    defaultValue: 20
+  - name: SPATIAL_EPOCHS
+    type: integer
+    description: >-
+      Training epochs of the spatial mapping model (the tutorial uses 30000; 5000 on CPU gives a
+      close approximation in a fraction of the time, see the README).
+    defaultValue: 30000
+  - name: MIN_DOMINANT_FRACTION
+    type: number
+    description: A spot's dominant_type is Mixed when its most abundant type holds less than this fraction of its cells.
+    defaultValue: 0.4
+  - name: N_COLOCATION_GROUPS
+    type: integer
+    description: >-
+      Number of co-location groups (NMF factors); 0 tries 4 to 8 and keeps the largest number whose
+      groups are stable across the NMF restarts.
+    defaultValue: 0
+  - name: MAX_PLOTS
+    type: integer
+    description: Abundance maps for at most this many cell types per sample (the most abundant first); 0 skips them.
+    defaultValue: 8
+  - name: SEED
+    type: integer
+    description: Seed for the reference subsampling, model initialisation, training and posterior sampling.
+    defaultValue: 42
+  - name: THREADS
+    type: integer
+    description: CPU threads for torch and BLAS; 0 = one per CPU of the container's quota.
+    defaultValue: 0
+  - name: USE_GPU
+    type: string
+    description: >-
+      auto (use the GPU when torch sees one), true (same, warning when there is none) or false
+      (always CPU).
+    defaultValue: "auto"
+# Each input in its own folder (placement: subfolder) when linked; without links the files are found
+# by name anywhere under INPUT_DIR.
+inputs:
+  - name: spatial
+    description: >-
+      <sample_id>.h5ad, one per sample, from st-qc (raw counts in layers["counts"]) or st-prep (raw
+      counts in X), with obsm["spatial"]; spot-based data (Visium). All samples are mapped jointly.
+    formats:
+      - format_3590
+    mediaTypes:
+      - application/x-hdf5
+    placement: subfolder
+    required: true
+  - name: metadata
+    description: st-prep's samples.csv (sample_id, path, platform, kind, ...).
+    mediaTypes:
+      - text/csv
+    placement: subfolder
+    required: true
+  - name: reference
+    description: >-
+      A single-cell RNA-seq reference .h5ad of the same tissue and species with raw counts (in X,
+      layers["counts"] or .raw), a cell type column (CELL_TYPE_COLUMN) and gene symbols as var_names
+      or var["feature_name"] (Ensembl ids are used when both sides have them) - for example a
+      CELLxGENE download. Or a signatures.csv from an earlier run's model output, which skips the
+      reference model.
+    formats:
+      - format_3590
+    mediaTypes:
+      - application/x-hdf5
+      - text/csv
+    placement: subfolder
+    required: true
+outputs:
+  - name: labels
+    description: >-
+      labels.csv (sample_id, obs_id, dominant_type), abundance.csv (sample_id, obs_id, one column per
+      cell type - q05 posterior cell abundance), proportions.csv (abundance / spot total),
+      colocation.csv (group, cell_type, weight), colocation_by_obs.csv (sample_id, obs_id, one column
+      per group), type_summary.csv (sample_id, cell_type, total_abundance, mean_abundance,
+      fraction_of_cells, n_dominant, fraction_dominant), summary.json, figures/ (per-sample abundance,
+      dominant type and co-location maps, training history, reconstruction QC, co-location weights,
+      composition), provenance.json.
+    mediaTypes:
+      - text/csv
+      - image/png
+      - application/json
+  - name: model
+    description: >-
+      signatures.csv (gene symbol, gene_id, one column per cell type - expected counts per cell; the
+      reference input of a later run), reference_summary.csv (cell_type, n_cells, n_used, status),
+      reference_history.csv and spatial_history.csv (epoch, elbo), genes_used.csv (gene, gene_id,
+      spatial_gene, match), provenance.json. No model objects.
+    mediaTypes:
+      - text/csv
+      - application/json
