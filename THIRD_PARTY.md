@@ -5,7 +5,7 @@ components, installed from PyPI at the pinned versions in `requirements.txt`; th
 apply to the image. Nothing here is GPL (no igraph or leidenalg: this app does not cluster). The
 open-source parts are under permissive licences (Apache-2.0, BSD, MIT, PSF, MPL-2.0; MPL-2.0 is
 file-level copyleft and leaves our code untouched). Two images are built (`TORCH_FLAVOUR`): the
-**cpu** variant has the CPU-only PyTorch wheel (`2.15.0+cpu`) and no NVIDIA software; in the **gpu**
+**cpu** variant has the CPU-only PyTorch wheel (`2.14.1+cpu`) and no NVIDIA software; in the **gpu**
 variant, the **NVIDIA CUDA libraries** that come with the CUDA build of PyTorch are proprietary but redistributable under the NVIDIA software licence
 terms shipped in each wheel (the same arrangement as every CUDA PyTorch image, including
 processor-lst-ai's base image).
@@ -14,8 +14,8 @@ processor-lst-ai's base image).
 |---|---|---|---|
 | cell2location 0.1.5 | `RegressionModel` (reference signatures), `Cell2location` (spatial mapping), `CoLocatedGroupsSklearnNMF` (co-location groups), `utils.filtering.filter_genes`. Called as a library, not modified. | Apache-2.0 | https://github.com/BayraktarLab/cell2location |
 | scvi-tools 1.5.2 | Model/training framework under cell2location (`setup_anndata`, training loop, posterior sampling). | BSD-3-Clause | https://github.com/scverse/scvi-tools |
-| PyTorch 2.15.0 (cpu variant: `+cpu` build; gpu variant: CUDA 13.2 build with triton 3.9.0) | Tensor computation on CPU or GPU. | BSD-3-Clause style (torch's licence bundle: Apache-2.0, BSD-2/3-Clause, BSL-1.0, ISC, MIT, Zlib); triton MIT | https://pytorch.org |
-| nvidia-cublas, -cuda-runtime, -cudnn-cu13, -cufft, -cusolver, -cusparse, -cusparselt-cu13, -nccl-cu13, -nvjitlink, -nvshmem-cu13, -nvtx, -cuda-nvrtc, -cuda-cupti, -cuda-cccl, -cufile; cuda-toolkit 13.2.2, cuda-bindings 13.4.4, cuda-pathfinder 1.8.5 | gpu variant only: CUDA runtime libraries (unused on CPU). | NVIDIA proprietary, redistributable (licence in each wheel); cuda-bindings/pathfinder Apache-2.0 | https://developer.nvidia.com/cuda-toolkit |
+| PyTorch 2.14.1 (cpu variant: `+cpu` build; gpu variant: `+cu126` build with triton 3.8.0) | Tensor computation on CPU or GPU. | BSD-3-Clause style (torch's licence bundle: Apache-2.0, BSD-2/3-Clause, BSL-1.0, ISC, MIT, Zlib); triton MIT | https://pytorch.org |
+| nvidia-*-cu12 (cublas, cuda-cupti, cuda-nvrtc, cuda-runtime, cudnn, cufft, cufile, curand, cusolver, cusparse, cusparselt, nccl, nvjitlink, nvshmem, nvtx; versions in `requirements-cuda.txt`); cuda-toolkit 12.6.3, cuda-bindings 12.9.10, cuda-pathfinder 1.8.5 | gpu variant only: CUDA runtime libraries (unused on CPU). | NVIDIA proprietary, redistributable (licence in each wheel); cuda-bindings/pathfinder Apache-2.0 | https://developer.nvidia.com/cuda-toolkit |
 | Pyro 1.9.1 (pyro-ppl, pyro-api 0.1.2) | Probabilistic programming (variational inference) the cell2location models are written in. | Apache-2.0 | https://github.com/pyro-ppl/pyro |
 | Lightning 2.6.6 (lightning, pytorch-lightning, lightning-utilities 0.15.3, torchmetrics 1.9.0) | Training loop used by scvi-tools. | Apache-2.0 | https://github.com/Lightning-AI/pytorch-lightning |
 | scanpy 1.12.5 | Imported by cell2location and scvi-tools. | BSD-3-Clause | https://github.com/scverse/scanpy |

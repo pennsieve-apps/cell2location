@@ -2,7 +2,7 @@
 # (pip resolves torch for the local platform; the image pins the linux/amd64 set in requirements.txt)
 cell2location==0.1.5
 scvi-tools==1.5.2
-torch==2.15.0
+torch==2.14.1
 pyro-ppl==1.9.1  # 1.9.2 removed pyro.infer.autoguide.utils.deep_getattr, which cell2location 0.1.5 imports
 lightning==2.6.6
 scanpy==1.12.5

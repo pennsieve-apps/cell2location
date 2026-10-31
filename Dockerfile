@@ -6,7 +6,7 @@ ENV PIP_NO_CACHE_DIR=1 \
 WORKDIR /processor
 
 # PyTorch build: cpu or cuda. app.yml's variants set it (cpu variant: CPU-only torch from the PyTorch CPU
-# index, no NVIDIA libraries; gpu variant: the CUDA 13.2 build, which also runs on CPU with USE_GPU=auto).
+# index, no NVIDIA libraries; gpu variant: the CUDA 12.6 build for the platform's driver 550, which also runs on CPU with USE_GPU=auto).
 # The default is cpu for a builder that passes no build arguments.
 ARG TORCH_FLAVOUR=cpu
 

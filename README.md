@@ -167,8 +167,8 @@ One release builds two images (`app.yml` → `variants`, Dockerfile `ARG TORCH_F
 
 | Variant | Image | Compute | Defaults | Pick it when |
 |---|---|---|---|---|
-| `cpu` (default, "CPU") | CPU-only PyTorch 2.15.0+cpu from the PyTorch CPU index, no NVIDIA libraries: 0.50 GB compressed, ~2.2 GB unpacked | `standard`, 4 vCPU / 16 GiB, 8 h timeout | `SPATIAL_EPOCHS=5000`, `USE_GPU=false` | No GPU is available or a 2-hour run is fine. ~2 h for one section with the default genes (5000 × 1.24 s + reference). |
-| `gpu` ("GPU") | CUDA 13.2 PyTorch 2.15.0 (NVIDIA libraries as pip wheels; needs driver ≥ 580, T4 or newer): 3.3 GB compressed, ~6.6 GB unpacked | `gpu`, 14 GiB, 4 h timeout | `SPATIAL_EPOCHS=30000` (the tutorial's), `USE_GPU=auto` | A GPU is available: the full tutorial setting. |
+| `cpu` (default, "CPU") | CPU-only PyTorch 2.14.1+cpu from the PyTorch CPU index, no NVIDIA libraries: 0.48 GB compressed, ~2.1 GB unpacked | `standard`, 4 vCPU / 16 GiB, 8 h timeout | `SPATIAL_EPOCHS=5000`, `USE_GPU=false` | No GPU is available or a 2-hour run is fine. ~2 h for one section with the default genes (5000 × 1.24 s + reference). |
+| `gpu` ("GPU") | CUDA 12.6 PyTorch 2.14.1 (NVIDIA libraries as pip wheels; runs on the platform's driver 550, T4 or newer): 4.0 GB compressed, ~11.4 GB unpacked | `gpu`, 14 GiB, 4 h timeout | `SPATIAL_EPOCHS=30000` (the tutorial's), `USE_GPU=auto` | A GPU is available: the full tutorial setting. |
 
 The GPU speed-up is **expected, not measured** here (no GPU on the build machine): the model is
 dense matrix algebra over spots × genes, and on a T4 we expect one to two orders of magnitude per
