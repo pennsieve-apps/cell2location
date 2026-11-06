@@ -125,7 +125,7 @@ inputs:
     formats:
       - format_3590
     mediaTypes:
-      - application/x-hdf5
+      - "application/x-hdf5; profile=anndata"
     placement: subfolder
     required: true
   - name: metadata
@@ -144,7 +144,7 @@ inputs:
     formats:
       - format_3590
     mediaTypes:
-      - application/x-hdf5
+      - "application/x-hdf5; profile=anndata"
       - text/csv
     placement: subfolder
     required: true
