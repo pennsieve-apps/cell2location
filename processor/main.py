@@ -51,20 +51,21 @@ DEFAULTS = {
     "CELL_TYPE_COLUMN": "cell_type",
     "REFERENCE_BATCH_COLUMN": "",
     "MIN_CELLS_PER_TYPE": "20",
-    "MAX_CELLS_PER_TYPE": "2000",
+    "MAX_CELLS_PER_TYPE": "300",    # cpu variant; the gpu variant sets 2000 (app.yml)
     "CELL_COUNT_CUTOFF": "5",
     "CELL_PERCENTAGE_CUTOFF2": "0.03",
     "NONZ_MEAN_CUTOFF": "1.12",
     "REFERENCE_EPOCHS": "250",
     "N_CELLS_PER_LOCATION": "8",
     "DETECTION_ALPHA": "20",
-    "SPATIAL_EPOCHS": "5000",      # cpu variant; the gpu variant sets 30000 (app.yml)
+    "SPATIAL_EPOCHS": "1000",      # cpu variant; the gpu variant sets 30000 (app.yml)
     "MIN_DOMINANT_FRACTION": "0.4",
     "N_COLOCATION_GROUPS": "0",
     "MAX_PLOTS": "8",
     "SEED": "42",
     "THREADS": "0",
     "USE_GPU": "false",           # cpu variant; the gpu variant sets auto
+    "ALLOW_LONG_CPU_RUN": "false",  # run on CPU even when the estimate exceeds the CPU budget (processor/budget.py)
 }
 PARAMETERS = tuple(DEFAULTS)
 MIN_GENES_MATCHED = 50          # below this the mapping is not worth running
@@ -113,6 +114,10 @@ def read_parameters(env=os.environ) -> dict:
         raise ParameterError("N_COLOCATION_GROUPS must be 0 (choose among 4-8) or >= 2")
     if p["MAX_PLOTS"] < 0 or p["THREADS"] < 0:
         raise ParameterError("MAX_PLOTS and THREADS must be >= 0")
+    allow = raw["ALLOW_LONG_CPU_RUN"].strip().lower()
+    if allow not in ("true", "false", "1", "0", "yes", "no"):
+        raise ParameterError(f"ALLOW_LONG_CPU_RUN must be true or false, got {raw['ALLOW_LONG_CPU_RUN']!r}")
+    p["ALLOW_LONG_CPU_RUN"] = allow in ("true", "1", "yes")
     p["USE_GPU"] = normalise_use_gpu(raw["USE_GPU"])
     if p["USE_GPU"] not in DEVICES:
         raise ParameterError(f"USE_GPU must be auto, true or false, got {raw['USE_GPU']!r}")
@@ -231,8 +236,10 @@ CITATIONS = [
 # stages
 
 
-def stage_reference(found, params: dict, accelerator: str, input_dir: Path, out_model: Path, fig_dir: Path) -> dict:
-    """Signatures from the reference .h5ad (or as given); writes model/signatures.csv and reference_summary.csv."""
+def prepare_reference(found, params: dict, input_dir: Path, fig_dir: Path) -> dict:
+    """The reference up to (not including) training: signatures.csv as given, or the .h5ad loaded,
+    subsampled and gene-filtered. "genes" is a signatures-like frame (index = symbol, gene_id) of the
+    genes the signatures will have, for counting the genes shared with the spatial data."""
     import pandas as pd
 
     from processor import genes as G
@@ -244,11 +251,8 @@ def stage_reference(found, params: dict, accelerator: str, input_dir: Path, out_
         types = G.signature_types(sig)
         log.info("reference: signatures.csv given (%s): %d genes x %d cell types; skipping the regression model",
                  _rel(found.reference, input_dir), len(sig), len(types))
-        shutil.copyfile(found.reference, out_model / "signatures.csv")
-        summary = pd.DataFrame({"cell_type": types, "n_cells": "", "n_used": "", "status": "from signatures.csv"})
-        write_frame(out_model / "reference_summary.csv", summary)
-        return {"signatures": sig, "summary": summary, "history": None, "qc": None, "source": "signatures.csv",
-                "seconds": round(time.monotonic() - t0, 1), "n_genes": len(sig), "n_types": len(types)}
+        return {"kind": "signatures", "signatures": sig, "genes": sig, "types": types, "n_cells": 0, "n_genes": 0,
+                "seconds": round(time.monotonic() - t0, 1)}
 
     ref = R.load_reference(found.reference, params["CELL_TYPE_COLUMN"], params["REFERENCE_BATCH_COLUMN"])
     n_cells_in, n_genes_in, counts_source = ref.n_obs, ref.n_vars, ref.uns["counts_source"]
@@ -260,6 +264,32 @@ def stage_reference(found, params: dict, accelerator: str, input_dir: Path, out_
     if ref.n_vars < MIN_GENES_MATCHED:
         raise ValueError(f"{ref.n_vars} genes pass filter_genes; relax CELL_COUNT_CUTOFF / CELL_PERCENTAGE_CUTOFF2 / "
                          "NONZ_MEAN_CUTOFF")
+    genes = pd.DataFrame({"gene_id": ref.var["gene_id"].astype(str).values}, index=G.make_unique(ref.var["symbol"]))
+    if not (genes["gene_id"].str.len() > 0).any():
+        genes = genes.drop(columns="gene_id")
+    return {"kind": "h5ad", "adata": ref, "summary": summary, "genes": genes, "n_cells": int(ref.n_obs),
+            "n_genes": int(ref.n_vars), "n_cells_in": n_cells_in, "n_genes_in": n_genes_in,
+            "counts_source": counts_source, "seconds": round(time.monotonic() - t0, 1)}
+
+
+def stage_reference(prep: dict, params: dict, accelerator: str, found, out_model: Path) -> dict:
+    """Signatures from the prepared reference (or as given); writes model/signatures.csv and reference_summary.csv."""
+    import pandas as pd
+
+    from processor import genes as G
+    from processor import reference as R
+
+    t0 = time.monotonic()
+    if prep["kind"] == "signatures":
+        sig, types = prep["signatures"], prep["types"]
+        shutil.copyfile(found.reference, out_model / "signatures.csv")
+        summary = pd.DataFrame({"cell_type": types, "n_cells": "", "n_used": "", "status": "from signatures.csv"})
+        write_frame(out_model / "reference_summary.csv", summary)
+        return {"signatures": sig, "summary": summary, "history": None, "qc": None, "source": "signatures.csv",
+                "seconds": round(prep["seconds"] + time.monotonic() - t0, 1), "n_genes": len(sig),
+                "n_types": len(types)}
+
+    ref, summary = prep["adata"], prep["summary"]
     res = R.train_signatures(ref, bool(params["REFERENCE_BATCH_COLUMN"]), params["REFERENCE_EPOCHS"], accelerator,
                              params["SEED"])
     sig = res["signatures"]
@@ -267,9 +297,9 @@ def stage_reference(found, params: dict, accelerator: str, input_dir: Path, out_
     write_frame(out_model / "reference_summary.csv", summary)
     write_frame(out_model / "reference_history.csv", res["history"])
     return {"signatures": sig, "summary": summary, "history": res["history"], "qc": res["qc"], "source": "h5ad",
-            "seconds": round(time.monotonic() - t0, 1), "seconds_train": res["seconds_train"],
-            "final_elbo": res["final_elbo"], "n_batches": res["n_batches"], "counts_source": counts_source,
-            "n_cells_in": n_cells_in, "n_genes_in": n_genes_in, "n_cells_used": int(ref.n_obs),
+            "seconds": round(prep["seconds"] + time.monotonic() - t0, 1), "seconds_train": res["seconds_train"],
+            "final_elbo": res["final_elbo"], "n_batches": res["n_batches"], "counts_source": prep["counts_source"],
+            "n_cells_in": prep["n_cells_in"], "n_genes_in": prep["n_genes_in"], "n_cells_used": int(ref.n_obs),
             "n_genes": int(ref.n_vars), "n_types": int(len(G.signature_types(sig))),
             "log1p_correlation": res["qc"]["log1p_correlation"]}
 
@@ -340,6 +370,7 @@ def main() -> int:
     import pandas as pd
     import torch
 
+    from processor import budget as B
     from processor import colocation as CO
     from processor import figures as F
     from processor import mapping as M
@@ -393,17 +424,15 @@ def main() -> int:
             "cgroup_memory_peak_mb": RS.cgroup_memory_peak_mb(), **extra,
         }
 
-    # ---- stage 1: reference signatures
+    # ---- stage 1a: the reference up to training
     try:
-        ref = stage_reference(found, params, accelerator, input_dir, out_model, fig_dir)
+        prep = prepare_reference(found, params, input_dir, fig_dir)
     except Exception as exc:
         log.exception("reference signatures failed: %s", exc)
         write_json(out_model / "provenance.json", provenance("failed", {"error": f"reference: {exc}"}))
         return 1
-    timings["reference"] = ref["seconds"]
-    rss["reference"] = peak_rss_mb()
 
-    # ---- stage 2: spatial mapping
+    # ---- the spatial samples, and the genes they share with the reference
     t = time.monotonic()
     adatas, images, statuses = load_samples(found, input_dir)
     if not adatas:
@@ -413,6 +442,39 @@ def main() -> int:
     try:
         vis = M.concat_samples(adatas)
         del adatas
+        n_shared = M.count_shared_genes(vis, prep["genes"])
+    except Exception as exc:
+        log.exception("spatial mapping failed: %s", exc)
+        write_json(out_model / "provenance.json", provenance("failed", {"error": f"mapping: {exc}", "samples": statuses}))
+        return 1
+    timings["load_samples"] = round(time.monotonic() - t, 1)
+
+    # ---- the CPU size guard, before any training (processor/budget.py)
+    cpu_estimate = B.estimate_cpu_seconds(vis.n_obs, n_shared, params["SPATIAL_EPOCHS"], prep["n_cells"],
+                                          prep["n_genes"], params["REFERENCE_EPOCHS"] if prep["kind"] == "h5ad" else 0)
+    verdict, message = B.check(cpu_estimate, accelerator, params["ALLOW_LONG_CPU_RUN"])
+    cpu_estimate["verdict"] = verdict
+    if verdict == "refused":
+        log.error("%s", message)
+        write_json(out_model / "provenance.json", provenance("refused", {"error": message, "cpu_estimate": cpu_estimate,
+                                                                         "samples": statuses}))
+        return B.EXIT_TOO_LARGE_FOR_CPU
+    (log.warning if verdict == "allowed" else log.info)("%s", message)
+
+    # ---- stage 1b: reference signatures
+    try:
+        ref = stage_reference(prep, params, accelerator, found, out_model)
+    except Exception as exc:
+        log.exception("reference signatures failed: %s", exc)
+        write_json(out_model / "provenance.json", provenance("failed", {"error": f"reference: {exc}"}))
+        return 1
+    del prep
+    timings["reference"] = ref["seconds"]
+    rss["reference"] = peak_rss_mb()
+
+    # ---- stage 2: spatial mapping
+    t = time.monotonic()
+    try:
         vis, cell_state, genes_used, gene_counts = M.intersect(vis, ref["signatures"])
         write_frame(out_model / "genes_used.csv", genes_used)
         if len(genes_used) < MIN_GENES_MATCHED:
@@ -421,7 +483,7 @@ def main() -> int:
         if len(genes_used) < FEW_GENES_WARNING:
             log.warning("only %d genes shared by the signatures and the spatial data; abundances will be imprecise",
                         len(genes_used))
-        timings["load_and_intersect"] = round(time.monotonic() - t, 1)
+        timings["intersect"] = round(time.monotonic() - t, 1)
         mapped = M.train_mapping(vis, cell_state, params["N_CELLS_PER_LOCATION"], params["DETECTION_ALPHA"],
                                  params["SPATIAL_EPOCHS"], accelerator, params["SEED"])
     except Exception as exc:
@@ -549,7 +611,7 @@ def main() -> int:
         "samples": sample_rows, "figures": sorted(figures), "parameters": params,
     }
     write_json(out_labels / "summary.json", summary)
-    extra = {"samples": statuses, "n_ok": n_ok, "n_failed": n_failed, "summary": {
+    extra = {"samples": statuses, "n_ok": n_ok, "n_failed": n_failed, "cpu_estimate": cpu_estimate, "summary": {
         "n_obs": summary["n_obs"], "n_cell_types": len(types), "genes": gene_counts,
         "colocation_groups": None if coloc is None else coloc["n_groups"]},
         "outputs": {"labels": sorted(p.name for p in out_labels.iterdir()) + ["provenance.json"],
