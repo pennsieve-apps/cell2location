@@ -93,6 +93,15 @@ def concat_samples(adatas: list[ad.AnnData]) -> ad.AnnData:
     return out
 
 
+def count_shared_genes(adata_vis: ad.AnnData, signatures: pd.DataFrame) -> int:
+    """How many genes intersect() will keep (mitochondrial genes left out), without copying any data.
+    signatures: index = symbol, optional gene_id column (the values are not used)."""
+    var = adata_vis.var
+    if "mt" in var:
+        var = var[~var["mt"].to_numpy()]
+    return len(G.match_genes(var, signatures))
+
+
 def intersect(adata_vis: ad.AnnData, signatures: pd.DataFrame) -> tuple[ad.AnnData, pd.DataFrame, pd.DataFrame, dict]:
     """Subset the spatial data and the signatures to the matched genes (same order).
 

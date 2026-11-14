@@ -48,9 +48,12 @@ mkdir -p in && ln -s /path/to/st-qc/output/spatial in/spatial \
   && ln -s /path/to/st-prep/output/metadata in/metadata && ln -s /path/to/reference-folder in/reference
 docker run --rm --platform linux/amd64 --memory 12g --cpus 4 --network none \
   -e INPUT_DIR=/data/input -e OUTPUT_DIR=/data/output -e REFERENCE_BATCH_COLUMN=donor_id \
-  -e SPATIAL_EPOCHS=2000 \
+  -e SPATIAL_EPOCHS=2000 -e MAX_CELLS_PER_TYPE=2000 -e ALLOW_LONG_CPU_RUN=true \
   -v "$PWD/in:/data/input:ro" -v "$PWD/data/output:/data/output" cell2location:cpu
 ```
+
+A full section is far over the cpu image's 2 h CPU budget (exit code 3), hence
+`ALLOW_LONG_CPU_RUN=true`; on a machine with an NVIDIA GPU use the cuda image with `--gpus all` instead.
 
 (Docker does not follow symlinks into folders outside the mount; on a laptop copy the three
 folders into `in/` instead.)

@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from processor import budget as B
 from processor import genes as G
 from processor import main as P
 from processor import mapping as M
@@ -151,7 +152,7 @@ def test_wrong_cell_type_column_fails(fixture_root, tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("params", [{"MIN_DOMINANT_FRACTION": "1.5"}, {"SPATIAL_EPOCHS": "0"},
                                     {"USE_GPU": "maybe"}, {"N_COLOCATION_GROUPS": "1"}, {"SEED": "x"},
-                                    {"MAX_CELLS_PER_TYPE": "5"}])
+                                    {"MAX_CELLS_PER_TYPE": "5"}, {"ALLOW_LONG_CPU_RUN": "maybe"}])
 def test_bad_parameters(fixture_root, tmp_path, monkeypatch, params):
     assert run(fixture_root / "linked", tmp_path / "out", monkeypatch, **params) == 2
 
@@ -187,3 +188,67 @@ def test_cgroup_cpus(tmp_path):
     (tmp_path / "cpu.max").write_text("max 100000\n")
     assert RS.cgroup_cpus(tmp_path) is None
     assert RS.choose_device("false")["accelerator"] == "cpu"
+
+
+# ---- the CPU size guard (processor/budget.py)
+
+DEMO = {"n_spots": 3928, "n_genes": 17375, "n_ref_cells": 7269, "n_ref_genes": 24117}   # the lymph node demo
+
+
+def test_cpu_estimate_reproduces_the_prod_calibration():
+    est = B.estimate_cpu_seconds(DEMO["n_spots"], DEMO["n_genes"], 1, DEMO["n_ref_cells"], DEMO["n_ref_genes"], 250)
+    assert 6.0 <= est["spatial_seconds"] <= 7.5          # prod: ~6 s/epoch on 4 vCPU Fargate
+    assert 75 * 60 <= est["reference_seconds"] <= 90 * 60  # prod: reference stage ~80 min
+    no_ref = B.estimate_cpu_seconds(100, 1000, 1000)
+    assert no_ref["reference_seconds"] == 0 and no_ref["total_seconds"] == no_ref["spatial_seconds"]
+
+
+def test_cpu_guard_passes_fixture_sized_data():
+    # the fixture: 2 x 196 spots, 160 genes, ~480 reference cells; at the cpu defaults
+    est = B.estimate_cpu_seconds(392, 160, int(P.DEFAULTS["SPATIAL_EPOCHS"]), 480, 160,
+                                 int(P.DEFAULTS["REFERENCE_EPOCHS"]))
+    assert B.check(est, "cpu", False)[0] == "ok"
+
+
+@pytest.mark.parametrize("spatial_epochs,max_cells", [(1000, 300), (30000, 2000)])
+def test_cpu_guard_refuses_demo_sized_data(spatial_epochs, max_cells):
+    n_cells = min(DEMO["n_ref_cells"], 17 * max_cells)       # 17 cell types kept at 300: ~4,900 cells
+    est = B.estimate_cpu_seconds(DEMO["n_spots"], DEMO["n_genes"], spatial_epochs, n_cells, DEMO["n_ref_genes"], 250)
+    verdict, message = B.check(est, "cpu", False)
+    assert verdict == "refused"
+    assert "GPU variant" in message and "ALLOW_LONG_CPU_RUN=true" in message
+    assert B.check(est, "cpu", True)[0] == "allowed"
+    assert B.check(est, "gpu", False)[0] == "gpu"
+
+
+def test_cpu_guard_size_that_fits_the_readme():
+    # README: with a signatures.csv, ~4,000 spots x 15,000 shared genes at 1000 epochs fits in 2 h;
+    # with a reference .h5ad of 3,000 cells x 15,000 genes, ~2,000 spots x 15,000 genes does.
+    assert B.check(B.estimate_cpu_seconds(4000, 15000, 1000), "cpu", False)[0] == "ok"
+    assert B.check(B.estimate_cpu_seconds(2000, 15000, 1000, 3000, 15000, 250), "cpu", False)[0] == "ok"
+
+
+def test_cpu_run_over_budget_is_refused_before_training(fixture_root, tmp_path, monkeypatch):
+    monkeypatch.setattr(B, "CPU_BUDGET_SECONDS", -1)   # every estimate exceeds it
+    out = tmp_path / "out"
+    assert run(fixture_root / "linked", out, monkeypatch) == B.EXIT_TOO_LARGE_FOR_CPU
+    prov = json.loads((out / "model" / "provenance.json").read_text())
+    assert prov["status"] == "refused" and prov["cpu_estimate"]["verdict"] == "refused"
+    assert prov["cpu_estimate"]["n_spots"] == 392 and prov["cpu_estimate"]["n_genes"] > 100
+    assert "GPU variant" in prov["error"]
+    assert not (out / "model" / "signatures.csv").exists()          # no training ran
+    assert not (out / "model" / "spatial_history.csv").exists()
+
+
+def test_cpu_run_over_budget_runs_with_the_override(fixture_root, tmp_path, monkeypatch):
+    monkeypatch.setattr(B, "CPU_BUDGET_SECONDS", -1)   # every estimate exceeds it
+    out = tmp_path / "out"
+    assert run(fixture_root / "linked", out, monkeypatch, ALLOW_LONG_CPU_RUN="true", REFERENCE_EPOCHS=5,
+               SPATIAL_EPOCHS=50, MAX_PLOTS=0, N_COLOCATION_GROUPS=2) == 0
+    prov = json.loads((out / "labels" / "provenance.json").read_text())
+    assert prov["status"] == "ok" and prov["cpu_estimate"]["verdict"] == "allowed"
+
+
+def test_fixture_run_is_within_the_cpu_budget(linked_run):
+    est = json.loads((linked_run / "labels" / "provenance.json").read_text())["cpu_estimate"]
+    assert est["verdict"] == "ok" and est["n_spots"] == 392

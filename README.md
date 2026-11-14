@@ -23,7 +23,9 @@ reference) gives a reference expression signature per cell type, after the tutor
 sum of those signatures, trained jointly on all samples (`batch_key="sample_id"`: a detection
 efficiency per sample) with full-data variational inference; the q05 of the posterior cell
 abundance is exported; (3) `CoLocatedGroupsSklearnNMF` (what `run_colocation` fits) on the
-abundances. All of this runs on CPU or, when the step has a GPU, on the GPU.
+abundances. It is meant for a GPU: **use the `gpu` variant.** The `cpu` variant is for very small
+data and testing; it estimates the CPU time before training and refuses a run estimated over 2 hours
+(see Variants and Runtime).
 
 ## Ports
 
@@ -78,24 +80,26 @@ is taken as the reference. The step is single-run: it writes at the root of each
 | `CELL_TYPE_COLUMN` | `cell_type` | Column of the reference's `obs` with the cell type. |
 | `REFERENCE_BATCH_COLUMN` | `""` | Optional `obs` column with the reference batch (donor, sample, chemistry); its effect is regressed out of the signatures. Empty: one batch. |
 | `MIN_CELLS_PER_TYPE` | `20` | Cell types with fewer reference cells are dropped (listed in `reference_summary.csv`). |
-| `MAX_CELLS_PER_TYPE` | `2000` | Reference cells per type subsampled (seeded) to at most this; `0` keeps all. |
+| `MAX_CELLS_PER_TYPE` | `300` (cpu), `2000` (gpu) | Reference cells per type subsampled (seeded) to at most this; `0` keeps all. |
 | `CELL_COUNT_CUTOFF` | `5` | `filter_genes`: genes in fewer reference cells are always dropped. |
 | `CELL_PERCENTAGE_CUTOFF2` | `0.03` | `filter_genes`: genes in at least this fraction of cells are always kept. |
 | `NONZ_MEAN_CUTOFF` | `1.12` | `filter_genes`: genes in between are kept when their mean in expressing cells is above this. |
 | `REFERENCE_EPOCHS` | `250` | Epochs of the reference regression model. |
 | `N_CELLS_PER_LOCATION` | `8` | Prior expected number of cells per spot; best estimated by counting nuclei in a few spots of the H&E. The lymph node tutorial uses 30 (a dense lymphoid tissue); the cell2location docs suggest 5-30 for Visium depending on the tissue. |
 | `DETECTION_ALPHA` | `20` | Regularisation of the per-spot detection efficiency: 20 when it varies within a slide (most data), 200 for very even data. |
-| `SPATIAL_EPOCHS` | `5000` (cpu), `30000` (gpu) | Epochs of the spatial model; 30000 is the tutorial's value. See Variants. |
+| `SPATIAL_EPOCHS` | `1000` (cpu), `30000` (gpu) | Epochs of the spatial model; 30000 is the tutorial's value. See Variants. |
 | `MIN_DOMINANT_FRACTION` | `0.4` | `dominant_type` is `Mixed` below this share of the spot's cells. |
 | `N_COLOCATION_GROUPS` | `0` | NMF groups; `0` chooses among 4-8 (see Method). |
 | `MAX_PLOTS` | `8` | Abundance maps for the this-many most abundant types per sample; `0` none. |
 | `SEED` | `42` | Seed for subsampling, initialisation, training and posterior sampling. |
 | `THREADS` | `0` | CPU threads (torch, BLAS); `0` = the container's CPU quota. |
 | `USE_GPU` | `false` (cpu), `auto` (gpu) | `auto`: the GPU when torch sees one; `true`: same, with a warning when there is none; `false`: CPU. |
+| `ALLOW_LONG_CPU_RUN` | `false` | On CPU, run even when the estimated training time is over the 2 h CPU budget (see Runtime, "CPU size guard"); the step may then hit its 8 h timeout. No effect on a GPU. |
 
 Exit codes: `0` ok, `1` no usable input (no reference, no readable sample, reference or mapping
-failed, fewer than 50 shared genes), `2` bad parameters. A sample that cannot be read is logged
-and skipped.
+failed, fewer than 50 shared genes), `2` bad parameters, `3` refused on CPU: the estimated CPU
+training time is over the 2 h budget (use the gpu variant, a smaller input, or
+`ALLOW_LONG_CPU_RUN=true`). A sample that cannot be read is logged and skipped.
 
 ## Outputs
 
@@ -137,25 +141,53 @@ and skipped.
 ## Runtime
 
 Measured on the lymph node demo (one Visium section after `st-qc`: 3,928 spots; reference 7,269
-cells of 20 types; 24,117 reference genes after `filter_genes`, 17,375 shared with the spatial data)
-on an M-series Mac shared with other builds, so wall times carry some contention:
+cells of 20 types; 24,117 reference genes after `filter_genes`, 17,375 shared with the spatial data).
+**Prod** is the cpu variant v0.1.2 on the Pennsieve Test compute node (Fargate 4 vCPU / 16 GiB,
+amd64), 2026-11-13; **local** is an M-series Mac shared with other builds, so its wall times carry
+some contention:
 
-| What | Native arm64 (venv) | Docker, linux/amd64 emulation, `--cpus 4` |
+| What | Prod: Fargate 4 vCPU, amd64 | Local: native arm64 (venv) | Local: Docker, linux/amd64 emulation, `--cpus 4` |
+|---|---|---|---|
+| Reference model, 250 epochs | reference stage incl. preparation ~80 min | 3.2 s/epoch on 4 threads (~13 min); 405-450 s on 10 threads | 4.6 s/epoch with 9,245 genes (stricter `filter_genes`), 1,152 s |
+| Spatial model, per epoch (17,375 genes) | **~6 s** | 1.24 s on 4 threads, 0.63 s on 10 threads | 4.2 s |
+| Spatial model, per epoch (8,685 genes) | - | - | 2.2 s |
+| Peak memory | - | 10.1 GB max RSS for the whole run (reference model on 24,117 genes + spatial model on 17,375 genes); 6.3 GB for the spatial stage alone | > 6 GB (OOM-killed at `--memory 6g` during training with 17,375 genes; at `--memory 4g` after 2,000 epochs with 8,685 genes, during posterior export) |
+
+On a real node the CPU is about 5× slower per epoch than the local native-arm64 numbers. At
+v0.1.2's CPU defaults (5000 spatial epochs, 2000 cells per type) the demo takes ~80 min + 5000 × 6 s
+≈ 9.5 h on prod and hits the cpu variant's 8 h timeout; the tutorial's 30000 epochs on CPU would be
+about 50 h. Memory grows with spots × genes (about 80 bytes per entry on top of ~1 GB), so the app
+asks for 4 vCPU / 16 GiB. On a GPU the cell2location authors report the full 30000-epoch training in
+minutes to tens of minutes per section.
+
+**CPU size guard.** Before any training, on CPU only, the app estimates the training time as
+
+    spots × shared genes × SPATIAL_EPOCHS × 1.0e-7 s  +  reference cells × reference genes × REFERENCE_EPOCHS × 1.1e-7 s
+
+(the reference term is 0 when a `signatures.csv` is given; the cell and gene counts are after
+`MAX_CELLS_PER_TYPE`, `filter_genes` and gene matching). The rates are calibrated conservatively on
+the prod measurement above: 6 s/epoch ÷ (3,928 × 17,375) = 8.8e-8, rounded up to 1.0e-7; and the
+whole ~80 min reference stage ÷ (7,269 × 24,117 × 250) = 1.1e-7 (preparation counted as training, so
+it over-estimates). Both are for 4 threads. When the estimate is over **2 hours** (a quarter of the
+8 h timeout, leaving room for posterior sampling, co-location and figures) the run stops with exit
+code 3 and a message: use the gpu variant, make the input smaller, or set `ALLOW_LONG_CPU_RUN=true`.
+The estimate and its verdict are in `provenance.json` (`cpu_estimate`). A GPU run is never checked.
+Examples at the cpu defaults (1000 spatial epochs, 250 reference epochs):
+
+| Input | Estimate | Verdict |
 |---|---|---|
-| Reference model, 250 epochs | 3.2 s/epoch on 4 threads (~13 min); 405-450 s on 10 threads | 4.6 s/epoch with 9,245 genes (stricter `filter_genes`), 1,152 s |
-| Spatial model, per epoch (17,375 genes) | 1.24 s on 4 threads, 0.63 s on 10 threads | 4.2 s |
-| Spatial model, per epoch (8,685 genes) | - | 2.2 s |
-| Peak memory | 10.1 GB max RSS for the whole run (reference model on 24,117 genes + spatial model on 17,375 genes); 6.3 GB for the spatial stage alone | > 6 GB (OOM-killed at `--memory 6g` during training with 17,375 genes; at `--memory 4g` after 2,000 epochs with 8,685 genes, during posterior export) |
+| the test fixture (2 × 196 spots, ~150 genes, 480 reference cells) | seconds | runs |
+| 1,000 spots × 10,000 shared genes; reference 3,000 cells × 15,000 genes | 37 min | runs |
+| 2,000 spots × 15,000 shared genes; reference 3,000 cells × 15,000 genes | 1.2 h | runs |
+| the demo section with a `signatures.csv` from an earlier run (3,928 × 17,375, no reference model) | 1.9 h | runs (just) |
+| the demo section with its reference .h5ad (4,866 cells after 300/type × 24,117 genes) | 2.8 h | refused |
+| the demo at v0.1.2's CPU defaults (5000 epochs, 2000 cells/type) | 10.8 h | refused |
 
-Memory grows with spots × genes (about 80 bytes per entry on top of ~1 GB), so the app asks
-for 4 vCPU / 16 GiB. The tutorial's 30000 spatial epochs on CPU would take about 10.5 h on 4
-threads (1.24 s × 30000, native arm64; slower in amd64 emulation, ~35 h); we did not run it to
-the end here (two attempts were stopped when the machine was shared, after the reference stage).
-That is why the variants below default to 5000 epochs on CPU and 30000 on a GPU, where the
-cell2location authors report the full training in minutes to tens of minutes per section.
+Rule of thumb: spots × shared genes × SPATIAL_EPOCHS must stay well under 7 × 10^10, less the
+reference term. That is at most one small section; anything larger belongs on the gpu variant.
 
 **The demo output** (`workflow-spatial-transcriptomics/data/work/lymph/deconvolution/`) is from
-`REFERENCE_BATCH_COLUMN=donor_id`, `SPATIAL_EPOCHS=2000`, everything else default, run
+`REFERENCE_BATCH_COLUMN=donor_id`, `SPATIAL_EPOCHS=2000`, `MAX_CELLS_PER_TYPE=2000`, everything else default, run
 natively on 10 threads (49 min: reference 9 min, spatial 2000 epochs 33 min, co-location 43 s; max RSS 10.1 GB; finished 10:26 EDT, 2026-10-30). See "Demo results" below.
 
 The image runs as uid 1000 with no network; `--memory` must be at least 8 GB for a Visium section
@@ -163,12 +195,15 @@ with the default gene filter.
 
 ## Variants
 
-One release builds two images (`app.yml` → `variants`, Dockerfile `ARG TORCH_FLAVOUR`):
+One release builds two images (`app.yml` → `variants`, Dockerfile `ARG TORCH_FLAVOUR`). It makes
+little sense to run cell2location without a GPU: use `gpu`. `cpu` stays the manifest's default variant
+only so that the app's usual image tag, and workflows that name no variant, keep pointing at the same
+image; it is listed second.
 
 | Variant | Image | Compute | Defaults | Pick it when |
 |---|---|---|---|---|
-| `cpu` (default, "CPU") | CPU-only PyTorch 2.14.1+cpu from the PyTorch CPU index, no NVIDIA libraries: 0.48 GB compressed, ~2.1 GB unpacked | `standard`, 4 vCPU / 16 GiB, 8 h timeout | `SPATIAL_EPOCHS=5000`, `USE_GPU=false` | No GPU is available or a 2-hour run is fine. ~2 h for one section with the default genes (5000 × 1.24 s + reference). |
-| `gpu` ("GPU") | CUDA 12.6 PyTorch 2.14.1 (NVIDIA libraries as pip wheels; runs on the platform's driver 550, T4 or newer): 4.0 GB compressed, ~11.4 GB unpacked | `gpu`, 14 GiB, 4 h timeout | `SPATIAL_EPOCHS=30000` (the tutorial's), `USE_GPU=auto` | A GPU is available: the full tutorial setting. |
+| `gpu` ("GPU (recommended)") | CUDA 12.6 PyTorch 2.14.1 (NVIDIA libraries as pip wheels; runs on the platform's driver 550, T4 or newer): 4.0 GB compressed, ~11.4 GB unpacked | `gpu`, 14 GiB, 4 h timeout | `SPATIAL_EPOCHS=30000` (the tutorial's), `MAX_CELLS_PER_TYPE=2000`, `USE_GPU=auto` | **Always, for real data.** The full tutorial setting. |
+| `cpu` (default image tag, "CPU (very small data only)") | CPU-only PyTorch 2.14.1+cpu from the PyTorch CPU index, no NVIDIA libraries: 0.48 GB compressed, ~2.1 GB unpacked | `standard`, 4 vCPU / 16 GiB, 8 h timeout | `SPATIAL_EPOCHS=1000`, `MAX_CELLS_PER_TYPE=300`, `USE_GPU=false` | **Very small data and testing only**: a few hundred to ~2,000 spots × ~15,000 genes with a small reference (see the examples under Runtime). Refuses a run estimated over 2 h on CPU (exit code 3). A full Visium section with its reference is refused; it takes ~6 s per spatial epoch on 4 vCPU. |
 
 The GPU speed-up is **expected, not measured** here (no GPU on the build machine): the model is
 dense matrix algebra over spots × genes, and on a T4 we expect one to two orders of magnitude per
@@ -182,10 +217,10 @@ available to compare with): going from 1000 to 2000 epochs changed the abundance
 mean |difference| of the per-spot proportions 0.009; dominant type unchanged in 98.7 % of spots;
 cell totals within 2 %) but sharpened the tissue structure: B cells in the top-10 % follicle-marker
 spots went from 1.3 to 2.3 cells per spot and the B/T anticorrelation across spots from -0.11 to
--0.30. The loss is still falling at 2000 epochs (`training_history.png`), so 5000 epochs (the cpu
-default) is a compromise: the spatial pattern and the ranking of types are stable early, while the
+-0.30. The loss is still falling at 2000 epochs (`training_history.png`), so 1000 epochs (the cpu
+default) gives the spatial pattern and the ranking of types, which are stable early, while the
 contrast between zones keeps improving towards the tutorial's 30000. Use the gpu variant when
-absolute abundances matter.
+absolute abundances matter, which is for any real analysis.
 
 ## Demo results
 

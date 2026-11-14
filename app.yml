@@ -10,7 +10,8 @@ application:
     signatures onto every spot of all samples jointly to estimate the absolute number of cells of
     each type per spot (q05 posterior), labels each spot with its dominant cell type (Mixed when no
     type dominates), and finds groups of co-located cell types (tissue zones) with cell2location's
-    NMF. Runs on CPU, and on a GPU when the step has one (much faster).
+    NMF. Meant for a GPU (the gpu variant); the cpu variant is for very small data and testing and
+    refuses inputs it estimates would take more than 2 hours on CPU.
   type: processor
   tags:
     - spatial-transcriptomics
@@ -23,9 +24,10 @@ application:
     - cell2location
 runtime:
   # Shared by both variants (below), these are the cpu variant's values. Measured on the lymph node
-  # demo (3,928 spots x 17,375 genes, 20 cell types): peak RSS 6.3 GB; spatial model 1.2 s/epoch on 4
-  # CPU threads (native arm64), 4.2 s/epoch in amd64 emulation; reference model ~13 min on 4 threads.
-  # The cpu variant defaults to SPATIAL_EPOCHS=5000 (~2 h on 4 vCPU); see README "Variants".
+  # demo (3,928 spots x 17,375 genes, 20 cell types): peak RSS 6.3 GB; spatial model ~6 s/epoch on prod
+  # (Fargate 4 vCPU / 16 GiB, amd64), reference stage ~80 min there. The cpu variant (SPATIAL_EPOCHS=1000,
+  # MAX_CELLS_PER_TYPE=300) refuses a run estimated over 2 h on CPU (processor/budget.py); see README
+  # "Variants" and "Runtime".
   cpu: 4096
   memory: 16384
   computeTypes:
@@ -48,8 +50,10 @@ parameters:
     defaultValue: 20
   - name: MAX_CELLS_PER_TYPE
     type: integer
-    description: Reference cells per type are subsampled (seeded) to at most this many; 0 keeps every cell.
-    defaultValue: 2000
+    description: >-
+      Reference cells per type are subsampled (seeded) to at most this many; 0 keeps every cell. The
+      cpu variant defaults to 300, the gpu variant to 2000.
+    defaultValue: 300
   - name: CELL_COUNT_CUTOFF
     type: number
     description: filter_genes cell_count_cutoff - genes detected in fewer reference cells than this are always dropped.
@@ -84,9 +88,9 @@ parameters:
     type: integer
     description: >-
       Training epochs of the spatial mapping model. The tutorial uses 30000 (the gpu variant's
-      default); the cpu variant defaults to 5000 to finish in about 2 hours on 4 vCPU (see the
-      README for the quality trade-off).
-    defaultValue: 5000
+      default); the cpu variant defaults to 1000, enough for very small data (see the README for the
+      quality trade-off of fewer epochs).
+    defaultValue: 1000
   - name: MIN_DOMINANT_FRACTION
     type: number
     description: A spot's dominant_type is Mixed when its most abundant type holds less than this fraction of its cells.
@@ -115,6 +119,14 @@ parameters:
       auto (use the GPU when torch sees one), true (same, warning when there is none) or false
       (always CPU). The cpu variant's image has no CUDA libraries.
     defaultValue: "false"
+  - name: ALLOW_LONG_CPU_RUN
+    type: boolean
+    description: >-
+      On CPU the app estimates the training time before it starts (spots x shared genes x
+      SPATIAL_EPOCHS, plus reference cells x genes x REFERENCE_EPOCHS, at rates measured on a 4 vCPU
+      node) and stops with exit code 3 when the estimate is over 2 hours. true runs it anyway (it may
+      hit the 8 h timeout). Has no effect on a GPU.
+    defaultValue: false
 # Each input in its own folder (placement: subfolder) when linked; without links the files are found
 # by name anywhere under INPUT_DIR.
 inputs:
@@ -172,22 +184,13 @@ outputs:
       - text/csv
       - application/json
 variants:
-  - id: cpu
-    name: CPU
-    default: true
-    description: >-
-      CPU-only PyTorch on a standard task; 5000 spatial epochs by default (about 2 hours for a
-      4,000-spot Visium section on 4 vCPU).
-    build:
-      args:
-        TORCH_FLAVOUR: cpu
-    runtime:
-      computeTypes: [standard]
+  # Listed first: the variant to use. cpu stays the default (default: true) so the app's usual image tag
+  # and the workflows that name no variant keep pointing at the same image.
   - id: gpu
-    name: GPU
+    name: GPU (recommended)
     description: >-
-      CUDA PyTorch on an NVIDIA GPU (T4 or newer); the tutorial's full 30000 spatial epochs, expected
-      to take well under an hour per Visium section.
+      The variant to use. CUDA PyTorch on an NVIDIA GPU (T4 or newer) with the tutorial's settings:
+      30000 spatial epochs, up to 2000 reference cells per type.
     build:
       args:
         TORCH_FLAVOUR: cuda
@@ -198,8 +201,23 @@ variants:
     parameters:
       SPATIAL_EPOCHS:
         defaultValue: 30000
+      MAX_CELLS_PER_TYPE:
+        defaultValue: 2000
       USE_GPU:
         defaultValue: "auto"
+  - id: cpu
+    name: CPU (very small data only)
+    default: true
+    description: >-
+      For very small data and testing only: CPU-only PyTorch, 1000 spatial epochs and 300 reference
+      cells per type, and it refuses inputs estimated over 2 hours on CPU (a single full Visium
+      section, about 4,000 spots x 17,000 genes, takes ~6 s per epoch on 4 vCPU and is refused). Use
+      the GPU variant for real data.
+    build:
+      args:
+        TORCH_FLAVOUR: cpu
+    runtime:
+      computeTypes: [standard]
 
 # How a release is tested before it is made public: the inputs a review run uses.
 # See app-deploy-service docs/app-manifest-review.md.
